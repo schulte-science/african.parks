@@ -12,7 +12,8 @@ app_server <- function(input, output, session) {
       dplyr::mutate(DateRun = as.Date(DateRun, format = "%m/%d/%Y")) |>
       dplyr::filter(!Amplicon %in% "16S"),
 
-    meta = read.csv("JordanaSamples - Metadata_20250225.csv", na = ""),
+    meta = read.csv("JordanaSamples - Metadata_20250225.csv", na = "") |>
+      dplyr::mutate(latitude = ifelse(latitude < -1000405, NA, latitude)),
 
     vert = read.csv("JordanaSamples - 12S_Summary_20250225.csv", na = ""),
 
