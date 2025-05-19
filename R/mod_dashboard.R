@@ -182,7 +182,13 @@ mod_dashboard_server <- function(id, rv, parentSession) {
     output$runs_plot <- ggiraph::renderGirafe({
       req(rv$runs)
 
-      print(rv$runs)
+      tmp_runs <- rv$runs |>
+        dplyr::group_by(Amplicon, DateRun) |>
+        dplyr::summarize(Samples = sum(Samples)) |>
+        dplyr::ungroup() |>
+        dplyr::group_by(Amplicon) |>
+        dplyr::mutate(Samples = cumsum(Samples))
+
       p <- ggplot2::ggplot(rv$runs, ggplot2::aes(x = DateRun, y = Samples, fill = Amplicon)) +
         ggiraph::geom_bar_interactive(
           ggplot2::aes(tooltip = paste0("Run: ", JVRunId, "\nAmplicon: ", Amplicon, "\nSamples: ", Samples),
@@ -304,7 +310,7 @@ mod_dashboard_server <- function(id, rv, parentSession) {
                                         # y = factor(species_id_dna_common, levels = rev(sort(unique(species_id_dna_common)))),
                                         fill = name_of_park, tooltip = paste0("Species: ", species_id_dna_common, "\nCount: ", count, "\nPark: ", name_of_park))) +
         ggiraph::geom_col_interactive(position = "stack") +
-        ggplot2::scale_fill_manual(values = c("gray30", "#A8D5A1", "gray80", "#28a745"), guide = "none") +
+        ggplot2::scale_fill_manual(values = c("#b52727", "#28a745", "#002790", "#ec7627", "#901e7c"), guide = "none") +
         ggplot2::labs(y = "Samples", fill = "Park") +
         ggplot2::theme_bw() +
         ggplot2::theme(

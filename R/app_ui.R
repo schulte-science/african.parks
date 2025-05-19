@@ -73,15 +73,15 @@ app_ui <- function(request) {
           bs4TabItem(
             tabName = "metadata",
             mod_metadata_ui("metadata")
+          ),
+          bs4TabItem(
+            tabName = "vertebrates",
+            mod_vertebrates_ui("vertebrates")
+          ),
+          bs4TabItem(
+            tabName = "plants",
+            mod_plants_ui("plants")
           )
-          # bs4TabItem(
-          #   tabName = "vertebrates",
-          #   mod_vertebrates_ui("vertebrates")
-          # ),
-          # bs4TabItem(
-          #   tabName = "plants",
-          #   mod_plants_ui("plants")
-          # )
         )
       )
       # footer = dashboardFooter(

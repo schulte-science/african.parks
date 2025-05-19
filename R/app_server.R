@@ -8,14 +8,19 @@ app_server <- function(input, output, session) {
 
   # Initialize reactive values ----
   rv <- reactiveValues(
-    runs = read.csv("JordanaSamples - Overview.csv", na = "") |>
+    runs = read.csv("Overview_20250402.csv", na.strings = c("", "NA")) |>
       dplyr::mutate(DateRun = as.Date(DateRun, format = "%m/%d/%Y")) |>
-      dplyr::filter(!Amplicon %in% "16S"),
+      dplyr::filter(Amplicon %in% c("12SVert", "trnL")),
 
-    meta = read.csv("JordanaSamples - Metadata_20250225.csv", na = "") |>
-      dplyr::mutate(latitude = ifelse(latitude < -1000405, NA, latitude)),
+    meta = read.csv("Metadata_20250402.csv", na.strings = c("", "NA")) |>
+      dplyr::mutate(latitude = ifelse(latitude < -1000405, NA, latitude),
+                    name_of_park = ifelse(is.na(name_of_park), "kafue", name_of_park)),
 
-    vert = read.csv("JordanaSamples - 12S_Summary_20250225.csv", na = ""),
+    vert = read.csv("12S_Summary_20250402.csv", na.strings = c("", "NA")) |>
+      dplyr::mutate(name_of_park = ifelse(is.na(name_of_park), "kafue", name_of_park)),
+
+    trnl = read.csv("trnL_Summary_20250320.csv", na.strings = c("", "NA")) |>
+      dplyr::filter(DNA_Diet_Host %in% "Herbivore"),
 
     focus = NULL
 
@@ -24,7 +29,7 @@ app_server <- function(input, output, session) {
   # Modules ----
   mod_dashboard_server("dashboard", rv, session)
   mod_metadata_server("metadata", rv, session)
-  # mod_vertebrates_server("vertebrates")
-  # mod_plants_server("plants")
+  mod_vertebrates_server("vertebrates", rv, session)
+  mod_plants_server("plants", rv, session)
   # mod_footer_server("footer")
 }

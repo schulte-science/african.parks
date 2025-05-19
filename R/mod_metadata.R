@@ -228,7 +228,7 @@ mod_metadata_server <- function(id, rv, parentSession) {
             ),
             popup = paste0(
               "<strong>Sample ID:</strong> ", barcode_id,
-              "<br><strong>Park:</strong> ", name_of_park,
+              "<br><strong>Park:</strong> ", stringr::str_to_sentence(name_of_park),
               "<br><strong>Status:</strong> ", status,
               ifelse(
                 is.na(species_id_dna_common) | species_id_dna_common == "",
@@ -266,8 +266,8 @@ mod_metadata_server <- function(id, rv, parentSession) {
           fillColor = ~fill_color,
           fillOpacity = ifelse(is.na(popup_data()$species_id_dna_common), 0, 0.9),
           color = ~border_color,
-          weight = 1,
-          clusterOptions = leaflet::markerClusterOptions()
+          weight = 1
+          # clusterOptions = leaflet::markerClusterOptions()
         )
     })
 
