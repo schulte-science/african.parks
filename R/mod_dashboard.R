@@ -6,7 +6,7 @@
 #'
 #' @noRd
 #'
-#' @import shiny bs4Dash shinyWidgets
+#' @import shiny bs4Dash shinyWidgets ggplot2
 mod_dashboard_ui <- function(id) {
   ns <- NS(id)
 
@@ -39,11 +39,12 @@ mod_dashboard_server <- function(id, rv, parentSession) {
     # Render the Runs ValueBox
     output$runs <- bs4Dash::renderValueBox({
       bs4Dash::valueBox(
-        value = tags$b("Runs"),
-        subtitle = renderText(
-            length(unique(rv$runs$JVRunId))
-            ),
-        icon = icon("hard-drive"),
+        value = tags$b("Samples Over Time"),
+        subtitle = renderText(paste0(
+            length(unique(rv$runs$JVRunId)),
+            " sequencing runs"
+            )),
+        icon = icon("clock", class = "fas", verify_fa = FALSE),
         footer = dash_open(target = "runs_box", session = session)
       )
     })
@@ -51,13 +52,14 @@ mod_dashboard_server <- function(id, rv, parentSession) {
     # Render the Metadata ValueBox dynamically
     output$metadata <- bs4Dash::renderValueBox({
       bs4Dash::valueBox(
-        value = tags$b("Samples Processed"),
-        subtitle = renderText(
+        value = tags$b("Samples By Park"),
+        subtitle = renderText(paste0(
           rv$meta |>
             dplyr::filter(!is.na(RunId_12SVert)) |>
-            nrow()
-        ),
-        icon = icon("clipboard"),
+            nrow(),
+          " total samples"
+        )),
+        icon = icon("location-dot"),
         footer = dash_open(target = "metadata_box", session = session)
       )
     })
@@ -65,10 +67,11 @@ mod_dashboard_server <- function(id, rv, parentSession) {
     # Render the Vertebrates ValueBox dynamically
     output$vertebrates <- bs4Dash::renderValueBox({
       bs4Dash::valueBox(
-        value = tags$b("Host Species"),
-        subtitle = renderText(
-          length(unique(rv$meta$species_id_dna))
-        ),
+        value = tags$b("Samples By Species"),
+        subtitle = renderText(paste0(
+          length(unique(rv$meta$species_id_dna)),
+          " host species"
+        )),
         icon = icon("cat"),
         footer = dash_open(target = "vertebrates_box", session = session)
       )
@@ -77,29 +80,64 @@ mod_dashboard_server <- function(id, rv, parentSession) {
     # List of ValueBoxes and corresponding Boxes
     boxes <- list(
       runs_box = list(
-        title = "Number of Samples by Run",
+        title = "Number of Samples Processed by Date",
         outputId = ns("runs_plot"),
-        content = ggiraph::girafeOutput(ns("runs_plot"))
+        content = div(
+          style = "position: relative;",
+          div(
+            style = "position: absolute; top: -59px; right: 10px; z-index: 10;",
+            downloadButton(
+              outputId = ns("runs_download"),
+              label = "Download Data",
+              class = "btn btn-sm btn-outline-secondary"
+            )
+          ),
+          ggiraph::girafeOutput(ns("runs_plot"))
+        )
+        # content = ggiraph::girafeOutput(ns("runs_plot"))
       ),
       metadata_box = list(
         title = "Number of Samples Processed by Park",
         outputId = ns("metadata_plot"),
-        content = ggiraph::girafeOutput(ns("metadata_plot"))
+        content = div(
+          style = "position: relative;",
+          div(
+            style = "position: absolute; top: -59px; right: 10px; z-index: 10;",
+            downloadButton(
+              outputId = ns("metadata_download"),
+              label = "Download Data",
+              class = "btn btn-sm btn-outline-secondary"
+            )
+          ),
+          ggiraph::girafeOutput(ns("metadata_plot"))
+        )
+        # content = ggiraph::girafeOutput(ns("metadata_plot"))
       ),
       vertebrates_box = list(
         title = "Number of Samples Processed by Host Species",
         outputId = ns("vertebrates_plot"),
-        content = tagList(
+        content = div(
+          style = "position: relative;",  # enables absolute positioning inside
+          # Floating button
+          div(
+            style = "position: absolute; top: -59px; right: 10px; z-index: 10;",
+            downloadButton(
+              outputId = ns("vertebrates_download"),
+              label = "Download Data",
+              class = "btn btn-sm btn-outline-secondary"
+            )
+          ),
+          # Toggle and plot
           div(style = "margin-bottom: 10px; display: flex;",
-              span("Count", style = "vertical-align: middle; font-size: 14px; margin-right: 10px;"),  # Left label
-              div(style = "display: flex; align-items: center;",  # Wrapper for switch to align properly
+              span("Count", style = "vertical-align: middle; font-size: 14px; margin-right: 10px;"),
+              div(style = "display: flex; align-items: center;",
                   materialSwitch(inputId = ns("order_toggle"),
                                  label = NULL,
-                                 value = FALSE,  # Default to "Count" mode (OFF)
+                                 value = FALSE,
                                  status = "primary",
                                  inline = TRUE)
               ),
-              span("Alphabetical", style = "vertical-align: middle; font-size: 14px;")  # Right label
+              span("Alphabetical", style = "vertical-align: middle; font-size: 14px;")
           ),
           ggiraph::girafeOutput(ns("vertebrates_plot"))
         )
@@ -177,29 +215,32 @@ mod_dashboard_server <- function(id, rv, parentSession) {
       }
     })
 
-
-    # Render runs plot
-    output$runs_plot <- ggiraph::renderGirafe({
+    # Get runs plot data
+    runs_plot_data <- reactive({
       req(rv$runs)
 
-      tmp_runs <- rv$runs |>
+      rv$runs |>
         dplyr::group_by(Amplicon, DateRun) |>
         dplyr::summarize(Samples = sum(Samples)) |>
         dplyr::ungroup() |>
         dplyr::group_by(Amplicon) |>
         dplyr::mutate(Samples = cumsum(Samples))
+    })
 
-      p <- ggplot2::ggplot(rv$runs, ggplot2::aes(x = DateRun, y = Samples, fill = Amplicon)) +
-        ggiraph::geom_bar_interactive(
-          ggplot2::aes(tooltip = paste0("Run: ", JVRunId, "\nAmplicon: ", Amplicon, "\nSamples: ", Samples),
-              data_id = as.factor(JVRunId)),
-          stat = "identity",
-          position = ggplot2::position_dodge2(preserve = "single", padding = 0),
-          width = 20
+    # Render runs plot
+    output$runs_plot <- ggiraph::renderGirafe({
+      req(runs_plot_data())
+
+      p <- ggplot2::ggplot(runs_plot_data(), ggplot2::aes(x = DateRun, y = Samples, color = Amplicon, group = Amplicon)) +
+        ggplot2::geom_line() +
+        ggiraph::geom_point_interactive(
+          ggplot2::aes(tooltip = paste0("Date: ", DateRun, "\nAmplicon: ", Amplicon, "\nSamples: ", Samples),
+                       data_id = as.factor(Amplicon))
         ) +
+        ggplot2::scale_color_manual(values = c("gray50", "#28a745")) +
         ggplot2::scale_x_date(date_labels = "%b %d", date_breaks = "1 month", expand = ggplot2::expansion(mult = 0.1)) +
-        ggplot2::scale_fill_manual(values = c("gray50", "#28a745"), guide = "none") +
-        ggplot2::labs(y = "Samples") +
+        ggplot2::scale_y_continuous(n.breaks = 10) +
+        ggplot2::labs(x = "Run date", y = "Samples (cumulative)") +
         ggplot2::theme_bw() +
         ggplot2::theme(
           axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1),
@@ -208,7 +249,11 @@ mod_dashboard_server <- function(id, rv, parentSession) {
           panel.grid.major.x = ggplot2::element_blank(),
           panel.grid.minor.y = ggplot2::element_blank(),
           panel.border = ggplot2::element_blank(),
-          panel.spacing = ggplot2::unit(0, "lines")
+          panel.spacing = ggplot2::unit(0, "lines"),
+          legend.position = c(0.02, 0.98),
+          legend.justification = c(0, 1),
+          legend.background = element_rect(fill = "transparent", color = NA),
+          legend.key = element_blank()
         )
 
       ggiraph::girafe(ggobj = p,
@@ -243,7 +288,21 @@ mod_dashboard_server <- function(id, rv, parentSession) {
           Run == 2 ~ "Zero reads",
           Run == 3 ~ "Completed"
         )) |>
-        dplyr::mutate(Run = factor(Run, levels = c("Not run", "Zero reads", "Completed")))
+        dplyr::mutate(Run = factor(Run, levels = c("Not run", "Zero reads", "Completed")),
+                      color = dplyr::case_when(
+                        name_of_park %in% "Akagera" & Run %in% "Completed" ~ "#901e7c",
+                        name_of_park %in% "Akagera" & Run %in% "Zero reads" ~ "#f5c8e0",
+                        name_of_park %in% "Iona" & Run %in% "Completed" ~ "#b52727",
+                        name_of_park %in% "Iona" & Run %in% "Zero reads" ~ "#FF9999",
+                        name_of_park %in% "Kafue" & Run %in% "Completed" ~ "#28a745",
+                        name_of_park %in% "Kafue" & Run %in% "Zero reads" ~ "#A8D5A1",
+                        name_of_park %in% "Odzala" & Run %in% "Completed" ~ "#002790",
+                        name_of_park %in% "Odzala" & Run %in% "Zero reads" ~ "#99CCFF",
+                        name_of_park %in% "Zakouma" & Run %in% "Completed" ~ "#ec7627",
+                        name_of_park %in% "Zakouma" & Run %in% "Zero reads" ~ "#fbcfaf",
+                        TRUE ~ "gray90"
+                      ),
+                      color = factor(color, levels = sort(unique(color), decreasing = TRUE)))
     })
 
     # Render metadata plot
@@ -251,11 +310,11 @@ mod_dashboard_server <- function(id, rv, parentSession) {
       req(metadata_plot_data())
 
       p <- ggplot2::ggplot(metadata_plot_data(),
-                           ggplot2::aes(x = Assay, y = value, fill = Run, tooltip = paste0("Status: ", Run, "\nCount: ", value))) +
+                           ggplot2::aes(x = Assay, y = value, fill = color, tooltip = paste0("Status: ", Run, "\nCount: ", value))) +
         ggiraph::geom_col_interactive(position = "stack") +
         ggplot2::facet_wrap(~name_of_park, nrow = 1) +
-        ggplot2::scale_fill_manual(values = c("gray90", "#A8D5A1", "#28a745"), guide = "none") +
         ggplot2::labs(y = "Samples") +
+        ggplot2::scale_fill_identity() +
         ggplot2::scale_y_continuous(n.breaks = 8, expand = ggplot2::expansion(mult = c(0, 0.05))) +
         ggplot2::theme_bw() +
         ggplot2::theme(
@@ -314,7 +373,7 @@ mod_dashboard_server <- function(id, rv, parentSession) {
         ggplot2::labs(y = "Samples", fill = "Park") +
         ggplot2::theme_bw() +
         ggplot2::theme(
-          axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, size = 5.5),
+          axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, size = 5),
           strip.background = ggplot2::element_blank(),
           axis.title.x = ggplot2::element_blank(),
           panel.grid.major.x = ggplot2::element_blank(),
@@ -329,9 +388,38 @@ mod_dashboard_server <- function(id, rv, parentSession) {
                       ))
     })
 
+    # Download buttons
+    output$runs_download <- downloadHandler(
+      filename = function() {
+        paste0("AfricanParks_SamplesOverTime_", Sys.Date(), ".csv")
+      },
+      content = function(file) {
+        req(runs_plot_data())
+        write.csv(runs_plot_data(), file, na = "", row.names = FALSE)
+      }
+    )
+
+    output$metadata_download <- downloadHandler(
+      filename = function() {
+        paste0("AfricanParks_SamplesByPark_", Sys.Date(), ".csv")
+      },
+      content = function(file) {
+        req(metadata_plot_data())
+        write.csv(metadata_plot_data() |> dplyr::select(-color) |> dplyr::rename(Park = name_of_park, Samples = value), file, na = "", row.names = FALSE)
+      }
+    )
+
+    output$vertebrates_download <- downloadHandler(
+      filename = function() {
+        paste0("AfricanParks_SamplesBySpecies_", Sys.Date(), ".csv")
+      },
+      content = function(file) {
+        req(vertebrates_plot_data())
+        write.csv(vertebrates_plot_data() |> dplyr::rename(Species = species_id_dna_common, Park = name_of_park, Samples = count), file, na = "", row.names = FALSE)
+      }
+    )
 
   })
-
 }
 
 dash_open <- function(target, session = shiny::getDefaultReactiveDomain()) {

@@ -8,22 +8,20 @@ app_server <- function(input, output, session) {
 
   # Initialize reactive values ----
   rv <- reactiveValues(
-    runs = read.csv("Overview_20250402.csv", na.strings = c("", "NA")) |>
-      dplyr::mutate(DateRun = as.Date(DateRun, format = "%m/%d/%Y")) |>
-      dplyr::filter(Amplicon %in% c("12SVert", "trnL")),
+    runs = read.csv("Overview_20250519.csv", na.strings = c("", "NA")) |>
+      dplyr::mutate(DateRun = as.Date(DateRun)),
 
-    meta = read.csv("Metadata_20250402.csv", na.strings = c("", "NA")) |>
+    meta = read.csv("Metadata_20250519.csv", na.strings = c("", "NA")) |>
       dplyr::mutate(latitude = ifelse(latitude < -1000405, NA, latitude),
                     name_of_park = ifelse(is.na(name_of_park), "kafue", name_of_park)),
 
-    vert = read.csv("12S_Summary_20250402.csv", na.strings = c("", "NA")) |>
+    vert = read.csv("12S_Summary_20250519.csv", na.strings = c("", "NA")) |>
       dplyr::mutate(name_of_park = ifelse(is.na(name_of_park), "kafue", name_of_park)),
 
-    trnl = read.csv("trnL_Summary_20250320.csv", na.strings = c("", "NA")) |>
+    trnl = read.csv("trnL_Summary_20250519.csv", na.strings = c("", "NA")) |>
       dplyr::filter(DNA_Diet_Host %in% "Herbivore"),
 
     focus = NULL
-
   )
 
   # Modules ----

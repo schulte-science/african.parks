@@ -42,7 +42,7 @@ app_ui <- function(request) {
           flat = T,
           id = "sidebarMenu",
           menuItem(
-            "Dashboard",
+            "Samples",
             tabName = "dashboard",
             icon = icon("chart-bar")
           ),
@@ -52,18 +52,26 @@ app_ui <- function(request) {
             icon = icon("clipboard")
           ),
           menuItem(
-            "Vertebrates",
+            "Carnivores",
             tabName = "vertebrates",
             icon = icon("cat")
           ),
           menuItem(
-            "Plants",
+            "Herbivores",
             tabName = "plants",
             icon = icon("seedling")
           )
         )
       ),
       body = bs4Dash::dashboardBody(
+        tags$style(HTML("
+    .material-switch input:checked + label::before {
+      background-color: #8175AABF !important;  /* switch fill */
+    }
+    .material-switch input:checked + label::after {
+      background-color: #8175AABF !important;  /* switch handle */
+    }
+  ")),
         # mod_globals_ui("globals"),
         bs4TabItems(
           bs4TabItem(

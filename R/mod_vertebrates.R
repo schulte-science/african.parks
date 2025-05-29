@@ -36,6 +36,23 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
   moduleServer(id, function(input, output, session) {
     ns <- NS(id)
 
+    # Get filtered data
+    vert_filtered <- reactive({
+      df <- rv$vert |>
+        dplyr::filter(DNA_Diet_Host %in% c("Carnivore", "Omnivore"))
+
+      # Apply filters only if something is selected
+      if (!is.null(input$filter_park) && length(input$filter_park) > 0) {
+        df <- df[df$name_of_park %in% input$filter_park, ]
+      }
+
+      if (!is.null(input$filter_species) && length(input$filter_species) > 0) {
+        df <- df[df$DNA_Common_Host %in% input$filter_species, ]
+      }
+
+      df
+    })
+
     # Track which boxes are open (dynamically)
     show_boxes <- reactiveValues()
 
@@ -44,7 +61,7 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
       bs4Dash::valueBox(
         value = tags$b("Prey presence"),
         subtitle = "Carnivore samples with prey",
-        icon = icon("bars-progress"),
+        icon = icon("circle-half-stroke"),
         footer = dash_open(target = "prey_presence_box", session = session)
       )
     })
@@ -54,7 +71,7 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
       bs4Dash::valueBox(
         value = tags$b("Prey composition"),
         subtitle = "Composition of carnivore diet",
-        icon = icon("circle-nodes"),
+        icon = icon("bars-progress"),
         footer = dash_open(target = "prey_composition_box", session = session)
       )
     })
@@ -64,114 +81,150 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
       prey_presence_box = list(
         title = "Proportion of Samples with Prey",
         outputId = ns("prey_presence_plot"),
-        content = tagList(
+        content = div(
+          style = "position: relative;",  # Enable absolute positioning inside
+          # Floating Download button
           div(
-            style = "margin-bottom: 10px; display: flex; flex-wrap: nowrap; gap: 15px; justify-content: space-between;",
-
-            # Park filter
-            div(
-              style = "flex: 1;",
-              shinyWidgets::pickerInput(
-                inputId = ns("filter_park"),
-                label = "Filter by Park",
-                choices = NULL,
-                selected = NULL,
-                multiple = TRUE,
-                options = list(
-                  `actions-box` = TRUE,
-                  liveSearch = TRUE,
-                  selectedTextFormat = "count > 1",
-                  countSelectedText = "{0} selected"
-                ),
-                width = "100%"
-              )
-            ),
-
-            # Host species filter
-            div(
-              style = "flex: 1;",
-              shinyWidgets::pickerInput(
-                inputId = ns("filter_species"),
-                label = "Filter by Host Species",
-                choices = NULL,
-                multiple = FALSE,
-                options = list(
-                  `actions-box` = TRUE,
-                  liveSearch = TRUE,
-                  title = "Nothing selected"
-                ),
-                width = "100%"
-              )
-            ),
-
-            # Variable selection
-            div(
-              style = "flex: 1;",
-              shinyWidgets::pickerInput(
-                inputId = ns("select_variable"),
-                label = "Select Grouping Variable",
-                choices = c("", "faecal_age", "faecal_texture", "species_sex", "species_age"),
-                selected = NULL,
-                multiple = FALSE,
-                options = list(
-                  `actions-box` = TRUE,
-                  liveSearch = TRUE,
-                  title = "Nothing selected"
-                ),
-                width = "100%"
-              )
+            style = "position: absolute; top: -59px; right: 10px; z-index: 10;",
+            downloadButton(
+              outputId = ns("prey_presence_download"),
+              label = "Download Data",
+              class = "btn btn-sm btn-outline-secondary"
             )
           ),
 
-          # Bar chart
-          ggiraph::girafeOutput(ns("prey_presence_plot"))
+          # Filters and plot
+          tagList(
+            div(
+              style = "margin-bottom: 10px; display: flex; flex-wrap: nowrap; gap: 15px; justify-content: space-between;",
+
+              # Park filter
+              div(
+                style = "flex: 1;",
+                shinyWidgets::pickerInput(
+                  inputId = ns("filter_park"),
+                  label = "Filter by Park",
+                  choices = NULL,
+                  selected = NULL,
+                  multiple = TRUE,
+                  options = list(
+                    `actions-box` = TRUE,
+                    liveSearch = TRUE,
+                    selectedTextFormat = "count > 1",
+                    countSelectedText = "{0} selected"
+                  ),
+                  width = "100%"
+                )
+              ),
+
+              # Host species filter
+              div(
+                style = "flex: 1;",
+                shinyWidgets::pickerInput(
+                  inputId = ns("filter_species"),
+                  label = "Filter by Host Species",
+                  choices = NULL,
+                  multiple = TRUE,
+                  options = list(
+                    `actions-box` = TRUE,
+                    liveSearch = TRUE,
+                    selectedTextFormat = "count > 1",
+                    countSelectedText = "{0} selected"
+                  ),
+                  width = "100%"
+                )
+              ),
+
+              # Variable selection
+              conditionalPanel(
+                condition = sprintf("input['%s'] != null && input['%s'] != ''",
+                                    ns("filter_species"), ns("filter_species")),
+                div(
+                  style = "flex: 1;",
+                  shinyWidgets::pickerInput(
+                    inputId = ns("select_variable"),
+                    label = "Select Grouping Variable",
+                    choices = c("", "faecal_age", "faecal_texture", "species_sex", "species_age"),
+                    selected = NULL,
+                    multiple = FALSE,
+                    options = list(
+                      `actions-box` = TRUE,
+                      liveSearch = TRUE,
+                      title = "Nothing selected"
+                    ),
+                    width = "100%"
+                  )
+                )
+              )
+            ),
+            ggiraph::girafeOutput(ns("prey_presence_plot"))
+          )
         )
       ),
       prey_composition_box = list(
         title = "Composition of carnivore diet",
         outputId = ns("prey_composition_plot"),
-        content = tagList(
+        content = div(
+          style = "position: relative;",  # allows absolute positioning for the button
+
+          # Download button floating in the top-right
           div(
-            style = "margin-bottom: 10px; display: flex; flex-wrap: nowrap; gap: 15px; justify-content: space-between;",
-
-            # Park filter
-            div(
-              style = "flex: 1;",
-              shinyWidgets::pickerInput(
-                inputId = ns("filter_park"),
-                label = "Filter by Park",
-                choices = NULL,
-                selected = NULL,
-                multiple = TRUE,
-                options = list(
-                  `actions-box` = TRUE,
-                  liveSearch = TRUE,
-                  selectedTextFormat = "count > 1",
-                  countSelectedText = "{0} selected"
-                ),
-                width = "100%"
-              )
-            ),
-
-            # Host species filter
-            div(
-              style = "flex: 1;",
-              shinyWidgets::pickerInput(
-                inputId = ns("filter_species"),
-                label = "Filter by Host Species",
-                choices = NULL,
-                multiple = FALSE,
-                options = list(
-                  `actions-box` = TRUE,
-                  liveSearch = TRUE
-                ),
-                width = "100%"
-              )
+            style = "position: absolute; top: -59px; right: 10px; z-index: 10;",
+            downloadButton(
+              outputId = ns("prey_composition_download"),
+              label = "Download Data",
+              class = "btn btn-sm btn-outline-secondary"
             )
           ),
 
-          # Bar chart
-          ggiraph::girafeOutput(ns("prey_composition_plot"))
+          # Main content layout
+          tagList(
+            div(
+              style = "margin-bottom: 10px; display: flex; flex-wrap: nowrap; gap: 15px; justify-content: space-between;",
+
+              # Park filter
+              div(
+                style = "flex: 1;",
+                shinyWidgets::pickerInput(
+                  inputId = ns("filter_park"),
+                  label = "Filter by Park",
+                  choices = NULL,
+                  selected = NULL,
+                  multiple = TRUE,
+                  options = list(
+                    `actions-box` = TRUE,
+                    liveSearch = TRUE,
+                    selectedTextFormat = "count > 1",
+                    countSelectedText = "{0} selected"
+                  ),
+                  width = "100%"
+                )
+              ),
+
+              # Host species filter
+              div(
+                style = "flex: 1;",
+                shinyWidgets::pickerInput(
+                  inputId = ns("filter_species"),
+                  label = "Filter by Host Species",
+                  choices = NULL,
+                  multiple = TRUE,
+                  options = list(
+                    `actions-box` = TRUE,
+                    liveSearch = TRUE,
+                    selectedTextFormat = "count > 1",
+                    countSelectedText = "{0} selected"
+                  ),
+                  width = "100%"
+                )
+              )
+            ),
+
+            # Bar chart
+            shinycssloaders::withSpinner(
+              ggiraph::girafeOutput(ns("prey_composition_plot")),
+              color = "#8175AABF", type = 8),
+          )
         )
       )
     )
@@ -216,34 +269,67 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
       }
     })
 
-    # Observe boxes for updating picker input choices
+    # Observe box for updating picker input choices
     observeEvent(rv$active_box, {
-
-      # Delay slightly to let the UI render first
       shinyjs::delay(100, {
+        req(vert_filtered())
+
         shinyWidgets::updatePickerInput(
           session, "filter_park",
-          choices = sort(unique(rv$meta$name_of_park))
+          choices = sort(unique(vert_filtered()$name_of_park))
         )
 
-        shinyWidgets::updatePickerInput(
-          session, "filter_species",
-          choices = c("",
-                      rv$vert |>
-                        dplyr::filter(DNA_Diet_Host %in% c("Carnivore", "Omnivore")) |>
-                        dplyr::distinct(DNA_Common_Host) |>
-                        dplyr::arrange(DNA_Common_Host) |>
-                        dplyr::pull(DNA_Common_Host)
+        if(rv$active_box %in% "prey_composition_box") {
+          shinyWidgets::updatePickerInput(
+            session, "filter_species",
+            choices = sort(unique(vert_filtered() |> dplyr::filter(!is.na(DNA_Common_Prey)) |> dplyr::pull(DNA_Common_Host)))
           )
-        )
+        } else {
+          shinyWidgets::updatePickerInput(
+            session, "filter_species",
+            choices = sort(unique(vert_filtered() |> dplyr::pull(DNA_Common_Host)))
+          )
+        }
       })
     })
 
-    # Render prey presence plot
-    output$prey_presence_plot <- ggiraph::renderGirafe({
-      req(rv$vert)
+    # Update park choices
+    observe({
+      req(vert_filtered())
 
-      df <- rv$vert |>
+      df <- vert_filtered()
+      if (!is.null(input$filter_species) && length(input$filter_species) > 0) {
+        df <- df[df$DNA_Common_Host %in% input$filter_species, ]
+      }
+
+      updatePickerInput(session, "filter_park",
+                        choices = sort(unique(df$name_of_park)),
+                        selected = input$filter_park[input$filter_park %in% df$name_of_park])
+    })
+
+    # Update species choices
+    observe({
+      req(vert_filtered())
+
+      df <- vert_filtered()
+      if (!is.null(input$filter_park) && length(input$filter_park) > 0) {
+        df <- df[df$name_of_park %in% input$filter_park, ]
+      }
+      if(!is.null(rv$active_box) && rv$active_box %in% "prey_composition_box") {
+        df <- df |>
+          dplyr::filter(!is.na(DNA_Common_Prey))
+      }
+
+      updatePickerInput(session, "filter_species",
+                        choices = sort(unique(df$DNA_Common_Host)),
+                        selected = input$filter_species[input$filter_species %in% df$DNA_Common_Host])
+    })
+
+    # Render prey presence plot
+    prey_presence_data <- reactive({
+      req(vert_filtered())
+
+      df <- vert_filtered() |>
         dplyr::filter(DNA_Diet_Host %in% c("Carnivore", "Omnivore"),
                       is.na(DNA_Species_Miscellaneous)) |>
         dplyr::left_join(
@@ -256,24 +342,40 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
                       Category2 = paste0(Category, ";", name_of_park)) |>
         dplyr::mutate(Category2 = factor(Category2, levels = sort(unique(Category2)))) |>
         dplyr::filter(n > 0) |>
-        dplyr::mutate(n = 1)
-
-      levels_cat <- levels(df$Category2)
-      color_palette <- c("#FF9999", "#A8D5A1", "#99CCFF", "#fbcfaf", "#b52727", "#28a745", "#002790", "#ec7627") # "#f5c8e0", "#901e7c"
-      named_colors <- setNames(color_palette[1:length(levels_cat)], levels_cat)
+        dplyr::mutate(n = 1) |>
+        dplyr::mutate(color = dplyr::case_when(
+          name_of_park %in% "akagera" & Category %in% "Prey detected" ~ "#901e7c",
+          name_of_park %in% "akagera" & Category %in% "No prey detected" ~ "#f5c8e0",
+          name_of_park %in% "iona" & Category %in% "Prey detected" ~ "#b52727",
+          name_of_park %in% "iona" & Category %in% "No prey detected" ~ "#FF9999",
+          name_of_park %in% "kafue" & Category %in% "Prey detected" ~ "#28a745",
+          name_of_park %in% "kafue" & Category %in% "No prey detected" ~ "#A8D5A1",
+          name_of_park %in% "odzala_okoua" & Category %in% "Prey detected" ~ "#002790",
+          name_of_park %in% "odzala_okoua" & Category %in% "No prey detected" ~ "#99CCFF",
+          name_of_park %in% "zakouma" & Category %in% "Prey detected" ~ "#ec7627",
+          name_of_park %in% "zakouma" & Category %in% "No prey detected" ~ "#fbcfaf",
+          TRUE ~ "gray90"
+        ),
+        color = factor(color, levels = sort(unique(color), decreasing = TRUE)))
 
       if (!is.null(input$filter_park) && length(input$filter_park) > 0) {
         df <- df[df$name_of_park %in% input$filter_park, ]
       }
 
-      if (input$filter_species != "") {
+      if (!is.null(input$filter_species) && length(input$filter_species) > 0) {
         df <- df[df$DNA_Common_Host %in% input$filter_species, ]
       }
 
       if (input$select_variable != "") {
         df <- df |>
-          dplyr::count(Barcode, name_of_park, DNA_Common_Host, Category2, Category, !!rlang::sym(input$select_variable))
+          dplyr::count(Barcode, name_of_park, DNA_Common_Host, Category2, Category, color, !!rlang::sym(input$select_variable))
       }
+
+      df
+    })
+
+    output$prey_presence_plot <- ggiraph::renderGirafe({
+      req(prey_presence_data())
 
       # Use select_variable if filter_species is set
       x_var <- if (input$filter_species != "" && input$select_variable != "") {
@@ -282,21 +384,20 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
         rlang::sym("DNA_Common_Host")
       }
 
-      p <- ggplot2::ggplot(df, ggplot2::aes(x = !!x_var, y = n, fill = Category2)) +
+      p <- ggplot2::ggplot(prey_presence_data(), ggplot2::aes(x = !!x_var, y = n, fill = color)) +
         ggiraph::geom_bar_interactive(
           ggplot2::aes(
-            tooltip = paste0("Sample ID: ", Barcode, "\nPark: ", name_of_park, "\nStatus: ", Category),
+            tooltip = paste0("Sample ID: ", Barcode, "\nPark: ", name_of_park, "\nConsumer: ", DNA_Common_Host, "\nStatus: ", Category),
             group = Category2
           ),
-          stat = "identity"
+          stat = "identity", alpha = 0.75
         ) +
-        ggplot2::scale_fill_manual(values = named_colors, guide = "none") +
-        # ggplot2::scale_fill_manual(values = c("#FF0000", "#00C800", "#0066FF", "#FFA500", "#FF9999", "#99FF99", "#99CCFF", "#FFD580")) +
-        # ggplot2::scale_fill_manual(values = c("gray70", "#28a745"), guide = "none") +
+        ggplot2::scale_fill_identity() +
         ggplot2::labs(y = "\n\n\nSamples") +
         ggplot2::theme_bw() +
         ggplot2::theme(
-          axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1),
+          axis.text.x = ggplot2::element_text(size = 6, angle = 45, hjust = 1, vjust = 1),
+          axis.title.x = ggplot2::element_blank(),
           strip.background = ggplot2::element_blank(),
           panel.grid.major.x = ggplot2::element_blank(),
           panel.grid.minor.y = ggplot2::element_blank(),
@@ -313,47 +414,81 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
     })
 
     # Render prey composition plot
-    output$prey_composition_plot <- ggiraph::renderGirafe({
+    prey_composition_data <- reactive({
       req(rv$vert)
 
-      df <- rv$vert |>
-        dplyr::filter(DNA_Diet_Host %in% c("Carnivore", "Omnivore"),
-                      !is.na(DNA_Species_Prey))
+      df <- vert_filtered() |>
+        dplyr::filter(!is.na(DNA_Common_Prey)) |>
+        dplyr::group_by(Barcode, name_of_park, DNA_Common_Host, DNA_Common_Prey) |>
+        dplyr::summarize(RRA_Prey = sum(RRA_Prey, na.rm = TRUE), .groups = "drop")
 
       if (!is.null(input$filter_park) && length(input$filter_park) > 0) {
         df <- df[df$name_of_park %in% input$filter_park, ]
       }
 
-      if (input$filter_species != "") {
+      if (!is.null(input$filter_species) && length(input$filter_species) > 0) {
         df <- df[df$DNA_Common_Host %in% input$filter_species, ]
-      } else {
-        df <- NULL
       }
 
       req(nrow(df) > 0)
 
-      p <- ggplot2::ggplot(df, ggplot2::aes(x = Barcode, y = RRA_Prey, fill = DNA_Common_Prey)) +
+      if(length(unique(df$Barcode)) >= 2) {
+        clustered_order <- df |>
+          dplyr::select(Barcode, name_of_park, DNA_Common_Prey, RRA_Prey) |>
+          tidyr::pivot_wider(
+            id_cols = c(Barcode, name_of_park),
+            names_from = DNA_Common_Prey,
+            values_from = RRA_Prey,
+            values_fill = 0
+          ) |>
+          dplyr::group_split(name_of_park) |>
+          purrr::keep(~ dplyr::n_distinct(.x$Barcode) >= 2) |>
+          purrr::map_df(~ {
+            mat <- as.matrix(dplyr::select(.x, -Barcode, -name_of_park))
+            rownames(mat) <- .x$Barcode
+            hc <- hclust(dist(mat))
+            tibble::tibble(
+              Barcode = hc$labels[hc$order],
+              order = seq_along(hc$order),
+              name_of_park = unique(.x$name_of_park)
+            )
+          })
+
+        df <- df |>
+          dplyr::left_join(clustered_order, by = c("Barcode", "name_of_park")) |>
+          dplyr::mutate(Barcode = factor(Barcode, levels = clustered_order$Barcode[order(clustered_order$order)]))
+
+        df
+      }
+    })
+
+
+    output$prey_composition_plot <- ggiraph::renderGirafe({
+      req(prey_composition_data())
+
+      p <- ggplot2::ggplot(prey_composition_data(), ggplot2::aes(x = Barcode, y = RRA_Prey, fill = DNA_Common_Prey)) +
         ggplot2::facet_grid(~ name_of_park, scales = "free_x", space = "free_x") +
         ggiraph::geom_bar_interactive(
           ggplot2::aes(
-            tooltip = paste0("Sample ID: ", Barcode, "\nPark: ", name_of_park, "\nPrey: ", DNA_Common_Prey, "\nRRA: ", RRA_Prey),
+            tooltip = paste0("Sample ID: ", Barcode, "\nPark: ", name_of_park, "\nConsumer: ", DNA_Common_Host, "\nPrey: ", DNA_Common_Prey, "\nRRA: ", RRA_Prey),
             group = DNA_Common_Prey
           ),
-          stat = "identity"
+          stat = "identity", alpha = 0.7
         ) +
         ggplot2::labs(y = "Relative Read Abundance") +
         ggplot2::guides(fill = "none") +
         ggplot2::theme_bw() +
         ggplot2::theme(
-          # axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1),
           axis.text.x = ggplot2::element_blank(),
           axis.ticks.x = ggplot2::element_blank(),
           strip.background = ggplot2::element_blank(),
+          strip.clip = "off",
           panel.grid.major.x = ggplot2::element_blank(),
           panel.grid.minor.y = ggplot2::element_blank(),
           panel.border = ggplot2::element_blank(),
           panel.spacing = ggplot2::unit(0, "lines")
         )
+
 
       ggiraph::girafe(
         ggobj = p,
@@ -363,8 +498,28 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
       )
     })
 
-  })
+    # Download buttons
+    output$prey_presence_download <- downloadHandler(
+      filename = function() {
+        paste0("AfricanParks_CarnivorePreyPresence_", Sys.Date(), ".csv")
+      },
+      content = function(file) {
+        req(prey_presence_data())
+        write.csv(prey_presence_data() |> dplyr::select(-c(n, Category2, color)) |> dplyr::relocate(Barcode, .before = DNA_Common_Host), file, na = "", row.names = FALSE)
+      }
+    )
 
+    output$prey_composition_download <- downloadHandler(
+      filename = function() {
+        paste0("AfricanParks_CarnivorePreyComposition_", Sys.Date(), ".csv")
+      },
+      content = function(file) {
+        req(prey_composition_data())
+        write.csv(prey_composition_data() |> dplyr::select(-order), file, na = "", row.names = FALSE)
+      }
+    )
+
+  })
 }
 
 dash_open <- function(target, session = shiny::getDefaultReactiveDomain()) {
