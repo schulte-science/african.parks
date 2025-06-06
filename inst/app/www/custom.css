@@ -1,0 +1,9 @@
+.material-switch input:checked+label::before {
+    background-color: #8175AABF !important;
+    /* switch fill */
+}
+
+.material-switch input:checked+label::after {
+    background-color: #8175AABF !important;
+    /* switch handle */
+}

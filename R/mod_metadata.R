@@ -6,7 +6,7 @@
 #'
 #' @noRd
 #'
-#' @import shiny bs4Dash
+#' @import shiny
 mod_metadata_ui <- function(id) {
   ns <- NS(id)
 

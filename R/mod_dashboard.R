@@ -6,7 +6,7 @@
 #'
 #' @noRd
 #'
-#' @import shiny bs4Dash shinyWidgets ggplot2
+#' @import shiny shinyWidgets ggplot2
 mod_dashboard_ui <- function(id) {
   ns <- NS(id)
 

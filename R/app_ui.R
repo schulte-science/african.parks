@@ -18,7 +18,13 @@ app_ui <- function(request) {
       ),
       dark = NULL,
       help = NULL,
-      preloader = list(html = tagList(waiter::spin_5(), h3("Preparing African Parks Diet DNA Database")), color = "#8175AABF"),
+      preloader = list(
+        html = tagList(
+          waiter::spin_5(),
+          h3("Preparing African Parks Diet DNA Database")
+        ),
+        color = "#8175AABF"
+      ),
       header = bs4Dash::dashboardHeader(
         img(
           src = "www/AfricanParksDNA_logo.png",
@@ -37,26 +43,26 @@ app_ui <- function(request) {
         expandOnHover = FALSE,
         collapsed = TRUE,
         minified = TRUE,
-        sidebarMenu(
+        bs4Dash::sidebarMenu(
           compact = F,
           flat = T,
           id = "sidebarMenu",
-          menuItem(
+          bs4Dash::menuItem(
             "Samples",
             tabName = "dashboard",
             icon = icon("chart-bar")
           ),
-          menuItem(
+          bs4Dash::menuItem(
             "Metadata",
             tabName = "metadata",
             icon = icon("clipboard")
           ),
-          menuItem(
+          bs4Dash::menuItem(
             "Carnivores",
             tabName = "vertebrates",
             icon = icon("cat")
           ),
-          menuItem(
+          bs4Dash::menuItem(
             "Herbivores",
             tabName = "plants",
             icon = icon("seedling")
@@ -64,29 +70,20 @@ app_ui <- function(request) {
         )
       ),
       body = bs4Dash::dashboardBody(
-        tags$style(HTML("
-    .material-switch input:checked + label::before {
-      background-color: #8175AABF !important;  /* switch fill */
-    }
-    .material-switch input:checked + label::after {
-      background-color: #8175AABF !important;  /* switch handle */
-    }
-  ")),
-        # mod_globals_ui("globals"),
-        bs4TabItems(
-          bs4TabItem(
+        bs4Dash::bs4TabItems(
+          bs4Dash::bs4TabItem(
             tabName = "dashboard",
             mod_dashboard_ui("dashboard")
           ),
-          bs4TabItem(
+          bs4Dash::bs4TabItem(
             tabName = "metadata",
             mod_metadata_ui("metadata")
           ),
-          bs4TabItem(
+          bs4Dash::bs4TabItem(
             tabName = "vertebrates",
             mod_vertebrates_ui("vertebrates")
           ),
-          bs4TabItem(
+          bs4Dash::bs4TabItem(
             tabName = "plants",
             mod_plants_ui("plants")
           )
