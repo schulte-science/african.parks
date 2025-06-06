@@ -12,11 +12,9 @@ app_server <- function(input, output, session) {
       dplyr::mutate(DateRun = as.Date(DateRun)),
 
     meta = read.csv("Metadata_20250519.csv", na.strings = c("", "NA")) |>
-      dplyr::mutate(latitude = ifelse(latitude < -1000405, NA, latitude),
-                    name_of_park = ifelse(is.na(name_of_park), "kafue", name_of_park)),
+      dplyr::mutate(latitude = ifelse(latitude < -1000405, NA, latitude)),
 
-    vert = read.csv("12S_Summary_20250519.csv", na.strings = c("", "NA")) |>
-      dplyr::mutate(name_of_park = ifelse(is.na(name_of_park), "kafue", name_of_park)),
+    vert = read.csv("12S_Summary_20250519.csv", na.strings = c("", "NA")),
 
     trnl = read.csv("trnL_Summary_20250519.csv", na.strings = c("", "NA")) |>
       dplyr::filter(DNA_Diet_Host %in% "Herbivore"),

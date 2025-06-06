@@ -111,7 +111,6 @@ mod_dashboard_server <- function(id, rv, parentSession) {
           ),
           ggiraph::girafeOutput(ns("metadata_plot"))
         )
-        # content = ggiraph::girafeOutput(ns("metadata_plot"))
       ),
       vertebrates_box = list(
         title = "Number of Samples Processed by Host Species",
@@ -145,37 +144,6 @@ mod_dashboard_server <- function(id, rv, parentSession) {
     )
 
     # Generalized Click Event Handling
-    # observeEvent(input$toggle_box, {
-    #   box_id <- input$toggle_box  # Get clicked box ID
-    #
-    #   if (!is.null(boxes[[box_id]])) {
-    #     if (is.null(show_boxes[[box_id]]) || !show_boxes[[box_id]]) {
-    #       # Insert the box dynamically inside the flex container
-    #       insertUI(
-    #         selector = paste0("#", ns("dynamic_boxes")),
-    #         where = "beforeEnd",
-    #         ui = div(
-    #           id = ns(box_id),
-    #           style = "flex: 1 1 40%; max-width: 40%; min-width: 400px; box-sizing: border-box;",  # Each box takes 50% width
-    #           bs4Dash::box(
-    #             title = boxes[[box_id]]$title,
-    #             solidHeader = FALSE,
-    #             status = "success",
-    #             collapsible = FALSE,
-    #             width = NULL,  # Let flexbox control width
-    #             boxes[[box_id]]$content
-    #           )
-    #         )
-    #       )
-    #       show_boxes[[box_id]] <- TRUE
-    #     } else {
-    #       # Remove the Box dynamically
-    #       removeUI(selector = paste0("#", ns(box_id)))
-    #       show_boxes[[box_id]] <- FALSE
-    #     }
-    #   }
-    # })
-
     observeEvent(input$toggle_box, {
       box_id <- input$toggle_box  # Get clicked box ID
 

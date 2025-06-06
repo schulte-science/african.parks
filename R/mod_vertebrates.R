@@ -50,6 +50,10 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
         df <- df[df$DNA_Common_Host %in% input$filter_species, ]
       }
 
+      if (!is.null(input$filter_prey) && length(input$filter_prey) > 0 && rv$active_box %in% "prey_composition_box") {
+        df <- df[df$DNA_Common_Prey %in% input$filter_prey, ]
+      }
+
       df
     })
 
@@ -217,6 +221,24 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
                   ),
                   width = "100%"
                 )
+              ),
+
+              # Prey species filter
+              div(
+                style = "flex: 1;",
+                shinyWidgets::pickerInput(
+                  inputId = ns("filter_prey"),
+                  label = "Filter by Prey Species",
+                  choices = NULL,
+                  multiple = TRUE,
+                  options = list(
+                    `actions-box` = TRUE,
+                    liveSearch = TRUE,
+                    selectedTextFormat = "count > 1",
+                    countSelectedText = "{0} selected"
+                  ),
+                  width = "100%"
+                )
               )
             ),
 
@@ -284,10 +306,20 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
             session, "filter_species",
             choices = sort(unique(vert_filtered() |> dplyr::filter(!is.na(DNA_Common_Prey)) |> dplyr::pull(DNA_Common_Host)))
           )
+
+          shinyWidgets::updatePickerInput(
+            session, "filter_prey",
+            choices = sort(unique(vert_filtered() |> dplyr::filter(!is.na(DNA_Common_Prey)) |> dplyr::pull(DNA_Common_Prey)))
+          )
         } else {
           shinyWidgets::updatePickerInput(
             session, "filter_species",
             choices = sort(unique(vert_filtered() |> dplyr::pull(DNA_Common_Host)))
+          )
+
+          shinyWidgets::updatePickerInput(
+            session, "filter_prey",
+            selected = NULL
           )
         }
       })
@@ -300,6 +332,10 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
       df <- vert_filtered()
       if (!is.null(input$filter_species) && length(input$filter_species) > 0) {
         df <- df[df$DNA_Common_Host %in% input$filter_species, ]
+      }
+
+      if (!is.null(input$filter_prey) && length(input$filter_prey) > 0) {
+        df <- df[df$DNA_Common_Prey %in% input$filter_prey, ]
       }
 
       updatePickerInput(session, "filter_park",
@@ -315,6 +351,9 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
       if (!is.null(input$filter_park) && length(input$filter_park) > 0) {
         df <- df[df$name_of_park %in% input$filter_park, ]
       }
+      if (!is.null(input$filter_prey) && length(input$filter_prey) > 0) {
+        df <- df[df$DNA_Common_Prey %in% input$filter_prey, ]
+      }
       if(!is.null(rv$active_box) && rv$active_box %in% "prey_composition_box") {
         df <- df |>
           dplyr::filter(!is.na(DNA_Common_Prey))
@@ -323,6 +362,24 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
       updatePickerInput(session, "filter_species",
                         choices = sort(unique(df$DNA_Common_Host)),
                         selected = input$filter_species[input$filter_species %in% df$DNA_Common_Host])
+    })
+
+    # Update prey choices
+    observe({
+      req(vert_filtered())
+      req(rv$active_box %in% "prey_composition_box")
+
+      df <- vert_filtered()
+      if (!is.null(input$filter_park) && length(input$filter_park) > 0) {
+        df <- df[df$name_of_park %in% input$filter_park, ]
+      }
+      if (!is.null(input$filter_species) && length(input$filter_species) > 0) {
+        df <- df[df$DNA_Common_Host %in% input$filter_species, ]
+      }
+
+      updatePickerInput(session, "filter_prey",
+                        choices = sort(unique(df$DNA_Common_Prey)),
+                        selected = input$filter_prey[input$filter_prey %in% df$DNA_Common_Prey])
     })
 
     # Render prey presence plot
@@ -371,7 +428,7 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
           dplyr::count(Barcode, name_of_park, DNA_Common_Host, Category2, Category, color, !!rlang::sym(input$select_variable))
       }
 
-      df
+      df |> dplyr::mutate(name_of_park = ifelse(name_of_park %in% "odzala_okoua", "odzala", name_of_park))
     })
 
     output$prey_presence_plot <- ggiraph::renderGirafe({
@@ -430,14 +487,22 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
         df <- df[df$DNA_Common_Host %in% input$filter_species, ]
       }
 
-      req(nrow(df) > 0)
+      if (!is.null(input$filter_prey) && length(input$filter_prey) > 0) {
+        df <- df[df$DNA_Common_Prey %in% input$filter_prey, ]
+      }
 
-      if(length(unique(df$Barcode)) >= 2) {
+      if(nrow(df) > 0 && length(unique(df$Barcode)) >= 2) {
+        names_from_col <- if (is.null(input$filter_species) & !is.null(input$filter_prey)) {
+          "DNA_Common_Host"
+        } else {
+          "DNA_Common_Prey"
+        }
+
         clustered_order <- df |>
-          dplyr::select(Barcode, name_of_park, DNA_Common_Prey, RRA_Prey) |>
+          dplyr::select(Barcode, name_of_park, DNA_Common_Host, DNA_Common_Prey, RRA_Prey) |>
           tidyr::pivot_wider(
             id_cols = c(Barcode, name_of_park),
-            names_from = DNA_Common_Prey,
+            names_from = !!sym(names_from_col),
             values_from = RRA_Prey,
             values_fill = 0
           ) |>
@@ -457,17 +522,21 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
         df <- df |>
           dplyr::left_join(clustered_order, by = c("Barcode", "name_of_park")) |>
           dplyr::mutate(Barcode = factor(Barcode, levels = clustered_order$Barcode[order(clustered_order$order)]))
-
-        df
       }
+      df |> dplyr::mutate(name_of_park = ifelse(name_of_park %in% "odzala_okoua", "odzala", name_of_park))
     })
-
 
     output$prey_composition_plot <- ggiraph::renderGirafe({
       req(prey_composition_data())
 
-      p <- ggplot2::ggplot(prey_composition_data(), ggplot2::aes(x = Barcode, y = RRA_Prey, fill = DNA_Common_Prey)) +
-        ggplot2::facet_grid(~ name_of_park, scales = "free_x", space = "free_x") +
+      fill_var <- if (is.null(input$filter_species) && !is.null(input$filter_prey)) {
+        "DNA_Common_Host"} else {
+          "DNA_Common_Prey"}
+
+      print(fill_var)
+
+      p <- ggplot2::ggplot(prey_composition_data(), ggplot2::aes(x = Barcode, y = RRA_Prey, fill = .data[[fill_var]])) +
+        ggplot2::facet_grid(~ stringr::str_to_title(name_of_park), scales = "free_x", space = "free_x") +
         ggiraph::geom_bar_interactive(
           ggplot2::aes(
             tooltip = paste0("Sample ID: ", Barcode, "\nPark: ", name_of_park, "\nConsumer: ", DNA_Common_Host, "\nPrey: ", DNA_Common_Prey, "\nRRA: ", RRA_Prey),
