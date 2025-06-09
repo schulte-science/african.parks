@@ -77,6 +77,7 @@ mod_metadata_server <- function(id, rv, parentSession) {
     })
 
     # Track which boxes are open (dynamically)
+    active_box <- reactiveVal(NULL)
     show_boxes <- reactiveValues()
 
     # Render the Map ValueBox
@@ -202,43 +203,43 @@ mod_metadata_server <- function(id, rv, parentSession) {
       )
     )
 
-    # Generalized Click Event Handling
+    # Generalized click event handling
     observeEvent(input$toggle_box, {
       box_id <- input$toggle_box  # Get clicked box ID
+      old_id <- active_box()
 
-      # If there is an active box and it's different from the one clicked, remove it
-      if (!is.null(rv$active_box) && rv$active_box != box_id) {
-        removeUI(selector = paste0("#", ns(rv$active_box)))
-        show_boxes[[rv$active_box]] <- FALSE
+      # If another box is open, close it
+      if (!is.null(old_id) && old_id != box_id) {
+        removeUI(selector = paste0("#", ns(old_id)))
+        show_boxes[[old_id]] <- FALSE
       }
 
-      if (!is.null(boxes[[box_id]])) {
-        if (is.null(show_boxes[[box_id]]) || !show_boxes[[box_id]]) {
-          # Insert the new box dynamically
-          insertUI(
-            selector = paste0("#", ns("dynamic_boxes")),
-            where = "beforeEnd",
-            ui = div(
-              id = ns(box_id),
-              style = "width: 100%; box-sizing: border-box; margin-bottom: 10px;",  # Full width, stack, with spacing
-              bs4Dash::box(
-                title = boxes[[box_id]]$title,
-                solidHeader = FALSE,
-                status = "success",
-                collapsible = FALSE,
-                width = 12,  # Make it span full width inside the layout
-                boxes[[box_id]]$content
-              )
+      # Toggle the clicked box
+      if (isTRUE(show_boxes[[box_id]])) {
+        # If it's already open, close it
+        removeUI(selector = paste0("#", ns(box_id)))
+        show_boxes[[box_id]] <- FALSE
+        active_box(NULL)
+      } else {
+        # If it's closed, open it
+        insertUI(
+          selector = paste0("#", ns("dynamic_boxes")),
+          where = "beforeEnd",
+          ui = div(
+            id = ns(box_id),
+            style = "width:100%; box-sizing:border-box; margin-bottom:10px;",
+            bs4Dash::box(
+              title = boxes[[box_id]]$title,
+              solidHeader = FALSE,
+              status = "success",
+              collapsible = FALSE,
+              width = 12,
+              boxes[[box_id]]$content
             )
           )
-          show_boxes[[box_id]] <- TRUE
-          rv$active_box <- box_id  # Update active box
-        } else {
-          # Remove the currently displayed box
-          removeUI(selector = paste0("#", ns(box_id)))
-          show_boxes[[box_id]] <- FALSE
-          rv$active_box <- NULL  # Reset active box
-        }
+        )
+        show_boxes[[box_id]] <- TRUE
+        active_box(box_id)
       }
     })
 
@@ -322,7 +323,7 @@ mod_metadata_server <- function(id, rv, parentSession) {
 
       # Create color palette and popup data
       colors <- data.frame(
-        name_of_park = c("akagera", "iona", "kafue", "odzala_okoua", "zakouma"),
+        name_of_park = c("Akagera", "Iona", "Kafue", "Odzala", "Zakouma"),
         fill_color = c("#901e7c", "#b52727", "#28a745", "#002790", "#ec7627")
       )
 
@@ -370,7 +371,7 @@ mod_metadata_server <- function(id, rv, parentSession) {
       leaflet::leaflet() |>
         leaflet::addTiles(attribution = "") |>
         leaflet::addCircleMarkers(
-          data = meta_map(),
+          data = meta_map() |> dplyr::filter(!is.na(latitude)),
           lng = ~longitude,
           lat = ~latitude,
           popup = ~popup,
@@ -395,7 +396,7 @@ mod_metadata_server <- function(id, rv, parentSession) {
         leaflet::clearMarkers() |>
         leaflet::clearMarkerClusters() |>
         leaflet::addCircleMarkers(
-          data = meta_map(),
+          data = meta_map() |> dplyr::filter(!is.na(latitude)),
           lng = ~longitude,
           lat = ~latitude,
           popup = ~popup,
@@ -410,6 +411,22 @@ mod_metadata_server <- function(id, rv, parentSession) {
             NULL
           }
         )
+    })
+
+    # Render metadata warning
+    # in your moduleServer or server function:
+    output$metadata_warning <- renderText({
+      missing <- meta_map() |>
+        dplyr::filter(is.na(latitude)) |>
+        nrow()
+
+      if (missing == 0) {
+        ""
+      } else if (missing == 1) {
+        "1 sample missing coordinates"
+      } else {
+        paste0(missing, " samples missing coordinates")
+      }
     })
 
     # Render metadata table

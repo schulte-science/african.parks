@@ -14,7 +14,8 @@ vert <- googlesheets4::read_sheet("https://docs.google.com/spreadsheets/d/1VBkkz
   dplyr::mutate(RRA_Prey = ifelse(!is.na(DNA_Species_Prey), round(Reads / Reads_Prey * 100,2), NA))
 write.csv(vert, "12S_Summary_20250519.csv", row.names = F)
 
-trnl <- read.csv("~/Jonah Ventures Dropbox/JonahClients/MeyerJordana/MeyerJordana_Analysis/RunData/20250519/JVB3872-trnL-read-data_20250519.csv", check.names = FALSE) |>
+trnl_og <- read.csv("~/Jonah Ventures Dropbox/JonahClients/MeyerJordana/MeyerJordana_Analysis/RunData/20250519/JVB3872-trnL-read-data_20250519.csv", check.names = FALSE)
+trnl <- trnl_og |>
   dplyr::select(ESVId, matches("S[0-9]")) |>
   tidyr::pivot_longer(-ESVId, names_to = "SampleId", values_to = "Reads") |>
   dplyr::filter(Reads > 0) |>
@@ -29,7 +30,7 @@ trnl <- read.csv("~/Jonah Ventures Dropbox/JonahClients/MeyerJordana/MeyerJordan
   dplyr::filter(!(Replicate == "1" & any(Replicate == "2"))) |>
   dplyr::ungroup() |>
   dplyr::relocate(c(Barcode, Replicate), .before = SampleId) |>
-  dplyr::left_join(trnl |> dplyr::distinct(ESVId, .keep_all = TRUE) |> dplyr::select(TestId:`# species`), by = "ESVId") |>
+  dplyr::left_join(trnl_og |> dplyr::distinct(ESVId, .keep_all = TRUE) |> dplyr::select(TestId:`# species`), by = "ESVId") |>
   dplyr::left_join(vert |> dplyr::distinct(Barcode, .keep_all = TRUE) |> dplyr::select(Barcode, name_of_park, DNA_Species_Host, DNA_Common_Host, DNA_Diet_Host), by = "Barcode")
 
 write.csv(trnl, "trnL_Summary_20250519.csv", row.names = F)

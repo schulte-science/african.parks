@@ -53,6 +53,7 @@ mod_plants_server <- function(id, rv, parentSession) {
     })
 
     # Track which boxes are open (dynamically)
+    active_box <- reactiveVal(NULL)
     show_boxes <- reactiveValues()
 
     # Render the Ordination ValueBox
@@ -220,43 +221,43 @@ mod_plants_server <- function(id, rv, parentSession) {
       )
     )
 
-    # Generalized Click Event Handling
+    # Generalized click event handling
     observeEvent(input$toggle_box, {
       box_id <- input$toggle_box  # Get clicked box ID
+      old_id <- active_box()
 
-      # If there is an active box and it's different from the one clicked, remove it
-      if (!is.null(rv$active_box) && rv$active_box != box_id) {
-        removeUI(selector = paste0("#", ns(rv$active_box)))
-        show_boxes[[rv$active_box]] <- FALSE
+      # If another box is open, close it
+      if (!is.null(old_id) && old_id != box_id) {
+        removeUI(selector = paste0("#", ns(old_id)))
+        show_boxes[[old_id]] <- FALSE
       }
 
-      if (!is.null(boxes[[box_id]])) {
-        if (is.null(show_boxes[[box_id]]) || !show_boxes[[box_id]]) {
-          # Insert the new box dynamically
-          insertUI(
-            selector = paste0("#", ns("dynamic_boxes")),
-            where = "beforeEnd",
-            ui = div(
-              id = ns(box_id),
-              style = "width: 100%; box-sizing: border-box; margin-bottom: 10px;",  # Full width, stack, with spacing
-              bs4Dash::box(
-                title = boxes[[box_id]]$title,
-                solidHeader = FALSE,
-                status = "success",
-                collapsible = FALSE,
-                width = 12,  # Make it span full width inside the layout
-                boxes[[box_id]]$content
-              )
+      # Toggle the clicked box
+      if (isTRUE(show_boxes[[box_id]])) {
+        # If it's already open, close it
+        removeUI(selector = paste0("#", ns(box_id)))
+        show_boxes[[box_id]] <- FALSE
+        active_box(NULL)
+      } else {
+        # If it's closed, open it
+        insertUI(
+          selector = paste0("#", ns("dynamic_boxes")),
+          where = "beforeEnd",
+          ui = div(
+            id = ns(box_id),
+            style = "width:100%; box-sizing:border-box; margin-bottom:10px;",
+            bs4Dash::box(
+              title = boxes[[box_id]]$title,
+              solidHeader = FALSE,
+              status = "success",
+              collapsible = FALSE,
+              width = 12,
+              boxes[[box_id]]$content
             )
           )
-          show_boxes[[box_id]] <- TRUE
-          rv$active_box <- box_id  # Update active box
-        } else {
-          # Remove the currently displayed box
-          removeUI(selector = paste0("#", ns(box_id)))
-          show_boxes[[box_id]] <- FALSE
-          rv$active_box <- NULL  # Reset active box
-        }
+        )
+        show_boxes[[box_id]] <- TRUE
+        active_box(box_id)
       }
     })
 
@@ -335,7 +336,7 @@ mod_plants_server <- function(id, rv, parentSession) {
         sub_mat <- mat[inds, ]
         sub_group <- droplevels(group_vector[inds])
 
-        ad <- vegan::adonis2(sub_mat ~ sub_group, permutations = permutations, method = method)
+        ad <- suppressMessages(vegan::adonis2(sub_mat ~ sub_group, permutations = permutations, method = method))
 
         data.frame(
           Group1 = pair[1],
@@ -399,7 +400,7 @@ mod_plants_server <- function(id, rv, parentSession) {
 
       # NMDS ordination
       set.seed(123)
-      tmp_nmds <- vegan::metaMDS(tmp_wide, trymax = 1)
+      tmp_nmds <- suppressMessages(suppressWarnings(vegan::metaMDS(tmp_wide, trymax = 1)))
 
       # Site scores
       tmp_sites <- vegan::scores(tmp_nmds)$sites |>
@@ -412,6 +413,9 @@ mod_plants_server <- function(id, rv, parentSession) {
 
       xrange <- range(tmp_sites$NMDS1, na.rm = TRUE)
       yrange <- range(tmp_sites$NMDS2, na.rm = TRUE)
+
+      nm1_q <- quantile(tmp_sites$NMDS1, probs = c(0.25, 0.75))
+      nm2_q <- quantile(tmp_sites$NMDS2, probs = c(0.25, 0.75))
 
       tmp_spp <- vegan::scores(tmp_nmds, "species") |>
         as.data.frame() |>
@@ -427,20 +431,22 @@ mod_plants_server <- function(id, rv, parentSession) {
                       Consensus = ifelse(Consensus %in% c("NA", ""), NA, Consensus)) |>
         dplyr::mutate(
           quadrant = dplyr::case_when(
-            NMDS1 >= 0 & NMDS2 >= 0 ~ "Q1",
-            NMDS1 <  0 & NMDS2 >= 0 ~ "Q2",
-            NMDS1 <  0 & NMDS2 <  0 ~ "Q3",
-            NMDS1 >= 0 & NMDS2 <  0 ~ "Q4"
+            NMDS1 >= nm1_q[2] & NMDS2 >= nm2_q[2] ~ "Q1",
+            NMDS1 <= nm1_q[1] & NMDS2 >= nm2_q[2] ~ "Q2",
+            NMDS1 <= nm1_q[1] & NMDS2 <= nm2_q[1] ~ "Q3",
+            NMDS1 >= nm1_q[2] & NMDS2 <= nm2_q[1] ~ "Q4",
           ),
           dist = sqrt(NMDS1^2 + NMDS2^2)
         ) |>
+        dplyr::filter(!is.na(quadrant)) |>
         dplyr::group_by(quadrant) |>
-        dplyr::slice_max(order_by = dist, n = 5, with_ties = FALSE)
+        dplyr::slice_max(order_by = dist, n = 5, with_ties = FALSE) |>
+        dplyr::ungroup()
 
       # Run PERMANOVA
       if(length(unique(tmp_sites$DNA_Common_Host)) > 1) {
-        permanova <- vegan::adonis2(tmp_wide ~ rv$trnl$DNA_Common_Host[match(rownames(tmp_wide), rv$trnl$Barcode)],
-                                           permutations = 99, method = "bray")
+        permanova <- suppressMessages(vegan::adonis2(tmp_wide ~ rv$trnl$DNA_Common_Host[match(rownames(tmp_wide), rv$trnl$Barcode)],
+                                           permutations = 99, method = "bray"))
         perm_stats <- permanova[1, ]
         # perm_summary <- sprintf(
         #   "PERMANOVA results (99 permutations):\nDF = %d\nSST = %.3f\nR² = %.3f\nF = %.3f\np = %.3f",
@@ -470,7 +476,7 @@ mod_plants_server <- function(id, rv, parentSession) {
                                  ggplot2::aes(x = NMDS1, y = NMDS2, label = Consensus),
                                  color = "black", size = 3,
                                  inherit.aes = FALSE) +
-        ggplot2::labs(fill = "DNA-Inferred Host") +
+        ggplot2::labs(fill = "DNA-Inferred Consumer") +
         ggplot2::theme_bw()
 
       ggiraph::girafe(
@@ -518,7 +524,7 @@ mod_plants_server <- function(id, rv, parentSession) {
       if (nrow(df) == 0) return(NULL)
 
       tagList(
-        tags$h6("PERMANOVA by host (99 permutations):"),
+        tags$h6("PERMANOVA by consumer (99 permutations):"),
         DT::dataTableOutput(ns("diet_ordination_pairwise"))
       )
     })

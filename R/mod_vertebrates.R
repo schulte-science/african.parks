@@ -50,7 +50,7 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
         df <- df[df$DNA_Common_Host %in% input$filter_species, ]
       }
 
-      if (!is.null(input$filter_prey) && length(input$filter_prey) > 0 && rv$active_box %in% "prey_composition_box") {
+      if (!is.null(input$filter_prey) && length(input$filter_prey) > 0 && active_box() %in% "prey_composition_box") {
         df <- df[df$DNA_Common_Prey %in% input$filter_prey, ]
       }
 
@@ -58,6 +58,7 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
     })
 
     # Track which boxes are open (dynamically)
+    active_box <- reactiveVal(NULL)
     show_boxes <- reactiveValues()
 
     # Render the Runs ValueBox
@@ -251,48 +252,48 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
       )
     )
 
-    # Generalized Click Event Handling
+    # Generalized click event handling
     observeEvent(input$toggle_box, {
       box_id <- input$toggle_box  # Get clicked box ID
+      old_id <- active_box()
 
-      # If there is an active box and it's different from the one clicked, remove it
-      if (!is.null(rv$active_box) && rv$active_box != box_id) {
-        removeUI(selector = paste0("#", ns(rv$active_box)))
-        show_boxes[[rv$active_box]] <- FALSE
+      # If another box is open, close it
+      if (!is.null(old_id) && old_id != box_id) {
+        removeUI(selector = paste0("#", ns(old_id)))
+        show_boxes[[old_id]] <- FALSE
       }
 
-      if (!is.null(boxes[[box_id]])) {
-        if (is.null(show_boxes[[box_id]]) || !show_boxes[[box_id]]) {
-          # Insert the new box dynamically
-          insertUI(
-            selector = paste0("#", ns("dynamic_boxes")),
-            where = "beforeEnd",
-            ui = div(
-              id = ns(box_id),
-              style = "width: 100%; box-sizing: border-box; margin-bottom: 10px;",  # Full width, stack, with spacing
-              bs4Dash::box(
-                title = boxes[[box_id]]$title,
-                solidHeader = FALSE,
-                status = "success",
-                collapsible = FALSE,
-                width = 12,  # Make it span full width inside the layout
-                boxes[[box_id]]$content
-              )
+      # Toggle the clicked box
+      if (isTRUE(show_boxes[[box_id]])) {
+        # If it's already open, close it
+        removeUI(selector = paste0("#", ns(box_id)))
+        show_boxes[[box_id]] <- FALSE
+        active_box(NULL)
+      } else {
+        # If it's closed, open it
+        insertUI(
+          selector = paste0("#", ns("dynamic_boxes")),
+          where = "beforeEnd",
+          ui = div(
+            id = ns(box_id),
+            style = "width:100%; box-sizing:border-box; margin-bottom:10px;",
+            bs4Dash::box(
+              title = boxes[[box_id]]$title,
+              solidHeader = FALSE,
+              status = "success",
+              collapsible = FALSE,
+              width = 12,
+              boxes[[box_id]]$content
             )
           )
-          show_boxes[[box_id]] <- TRUE
-          rv$active_box <- box_id  # Update active box
-        } else {
-          # Remove the currently displayed box
-          removeUI(selector = paste0("#", ns(box_id)))
-          show_boxes[[box_id]] <- FALSE
-          rv$active_box <- NULL  # Reset active box
-        }
+        )
+        show_boxes[[box_id]] <- TRUE
+        active_box(box_id)
       }
     })
 
     # Observe box for updating picker input choices
-    observeEvent(rv$active_box, {
+    observeEvent(active_box(), {
       shinyjs::delay(100, {
         req(vert_filtered())
 
@@ -301,7 +302,7 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
           choices = sort(unique(vert_filtered()$name_of_park))
         )
 
-        if(rv$active_box %in% "prey_composition_box") {
+        if(active_box() %in% "prey_composition_box") {
           shinyWidgets::updatePickerInput(
             session, "filter_species",
             choices = sort(unique(vert_filtered() |> dplyr::filter(!is.na(DNA_Common_Prey)) |> dplyr::pull(DNA_Common_Host)))
@@ -338,6 +339,11 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
         df <- df[df$DNA_Common_Prey %in% input$filter_prey, ]
       }
 
+      if(!is.null(active_box()) && active_box() %in% "prey_composition_box") {
+        df <- df |>
+          dplyr::filter(!is.na(DNA_Common_Prey))
+      }
+
       updatePickerInput(session, "filter_park",
                         choices = sort(unique(df$name_of_park)),
                         selected = input$filter_park[input$filter_park %in% df$name_of_park])
@@ -354,7 +360,7 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
       if (!is.null(input$filter_prey) && length(input$filter_prey) > 0) {
         df <- df[df$DNA_Common_Prey %in% input$filter_prey, ]
       }
-      if(!is.null(rv$active_box) && rv$active_box %in% "prey_composition_box") {
+      if(!is.null(active_box()) && active_box() %in% "prey_composition_box") {
         df <- df |>
           dplyr::filter(!is.na(DNA_Common_Prey))
       }
@@ -367,7 +373,7 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
     # Update prey choices
     observe({
       req(vert_filtered())
-      req(rv$active_box %in% "prey_composition_box")
+      req(active_box() %in% "prey_composition_box")
 
       df <- vert_filtered()
       if (!is.null(input$filter_park) && length(input$filter_park) > 0) {
@@ -401,16 +407,16 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
         dplyr::filter(n > 0) |>
         dplyr::mutate(n = 1) |>
         dplyr::mutate(color = dplyr::case_when(
-          name_of_park %in% "akagera" & Category %in% "Prey detected" ~ "#901e7c",
-          name_of_park %in% "akagera" & Category %in% "No prey detected" ~ "#f5c8e0",
-          name_of_park %in% "iona" & Category %in% "Prey detected" ~ "#b52727",
-          name_of_park %in% "iona" & Category %in% "No prey detected" ~ "#FF9999",
-          name_of_park %in% "kafue" & Category %in% "Prey detected" ~ "#28a745",
-          name_of_park %in% "kafue" & Category %in% "No prey detected" ~ "#A8D5A1",
-          name_of_park %in% "odzala_okoua" & Category %in% "Prey detected" ~ "#002790",
-          name_of_park %in% "odzala_okoua" & Category %in% "No prey detected" ~ "#99CCFF",
-          name_of_park %in% "zakouma" & Category %in% "Prey detected" ~ "#ec7627",
-          name_of_park %in% "zakouma" & Category %in% "No prey detected" ~ "#fbcfaf",
+          name_of_park %in% "Akagera" & Category %in% "Prey detected" ~ "#901e7c",
+          name_of_park %in% "Akagera" & Category %in% "No prey detected" ~ "#f5c8e0",
+          name_of_park %in% "Iona" & Category %in% "Prey detected" ~ "#b52727",
+          name_of_park %in% "Iona" & Category %in% "No prey detected" ~ "#FF9999",
+          name_of_park %in% "Kafue" & Category %in% "Prey detected" ~ "#28a745",
+          name_of_park %in% "Kafue" & Category %in% "No prey detected" ~ "#A8D5A1",
+          name_of_park %in% "Odzala" & Category %in% "Prey detected" ~ "#002790",
+          name_of_park %in% "Odzala" & Category %in% "No prey detected" ~ "#99CCFF",
+          name_of_park %in% "Zakouma" & Category %in% "Prey detected" ~ "#ec7627",
+          name_of_park %in% "Zakouma" & Category %in% "No prey detected" ~ "#fbcfaf",
           TRUE ~ "gray90"
         ),
         color = factor(color, levels = sort(unique(color), decreasing = TRUE)))
@@ -423,12 +429,12 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
         df <- df[df$DNA_Common_Host %in% input$filter_species, ]
       }
 
-      if (input$select_variable != "") {
+      if (nzchar(input$select_variable)) {
         df <- df |>
           dplyr::count(Barcode, name_of_park, DNA_Common_Host, Category2, Category, color, !!rlang::sym(input$select_variable))
       }
 
-      df |> dplyr::mutate(name_of_park = ifelse(name_of_park %in% "odzala_okoua", "odzala", name_of_park))
+      df
     })
 
     output$prey_presence_plot <- ggiraph::renderGirafe({
@@ -451,6 +457,7 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
         ) +
         ggplot2::scale_fill_identity() +
         ggplot2::labs(y = "\n\n\nSamples") +
+        ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0, 0.05))) +
         ggplot2::theme_bw() +
         ggplot2::theme(
           axis.text.x = ggplot2::element_text(size = 6, angle = 45, hjust = 1, vjust = 1),
@@ -523,7 +530,8 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
           dplyr::left_join(clustered_order, by = c("Barcode", "name_of_park")) |>
           dplyr::mutate(Barcode = factor(Barcode, levels = clustered_order$Barcode[order(clustered_order$order)]))
       }
-      df |> dplyr::mutate(name_of_park = ifelse(name_of_park %in% "odzala_okoua", "odzala", name_of_park))
+
+      df
     })
 
     output$prey_composition_plot <- ggiraph::renderGirafe({
@@ -532,8 +540,6 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
       fill_var <- if (is.null(input$filter_species) && !is.null(input$filter_prey)) {
         "DNA_Common_Host"} else {
           "DNA_Common_Prey"}
-
-      print(fill_var)
 
       p <- ggplot2::ggplot(prey_composition_data(), ggplot2::aes(x = Barcode, y = RRA_Prey, fill = .data[[fill_var]])) +
         ggplot2::facet_grid(~ stringr::str_to_title(name_of_park), scales = "free_x", space = "free_x") +
@@ -545,6 +551,7 @@ mod_vertebrates_server <- function(id, rv, parentSession) {
           stat = "identity", alpha = 0.7
         ) +
         ggplot2::labs(y = "Relative Read Abundance") +
+        ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0, 0.05))) +
         ggplot2::guides(fill = "none") +
         ggplot2::theme_bw() +
         ggplot2::theme(
